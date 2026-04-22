@@ -18,21 +18,18 @@ jobs:
           gdown --folder "https://drive.google.com/drive/folders/1Kzwj7u5UV33OXBnFf5fghLXVI_gR2Jao" -O ./game_files
         continue-on-error: true
 
-      - name: Download Tool (Direct)
+      - name: Download Il2CppDumper (Link Auto-Fix)
         run: |
           # Dùng link dự phòng v6.7.40 ổn định
-          $url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/archive/refs/heads/master.zip"
-          Invoke-WebRequest -Uri $url -OutFile dumper_master.zip
-          Expand-Archive -Path dumper_master.zip -DestinationPath ./temp_tool
-          # Di chuyển file ra ngoài cho đúng cấu trúc
-          Move-Item -Path ./temp_tool/Il2CppDumper-Binaries-master/* -Destination ./dumper -Force
+          $url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/raw/master/Il2CppDumper-v6.7.40.zip"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest -Uri $url -OutFile dumper.zip -UserAgent "Mozilla/5.0"
+          Expand-Archive -Path dumper.zip -DestinationPath ./dumper -Force
 
       - name: Run Dumper
         run: |
           $unity = Get-ChildItem -Path ./game_files -Recurse | Where-Object { $_.Name -match "UnityFramework|kgvn" } | Select-Object -First 1
           $metadata = Get-ChildItem -Path ./game_files -Recurse -Filter "global-metadata.dat" | Select-Object -First 1
-          Write-Host "File Binary: $($unity.FullName)"
-          Write-Host "File Metadata: $($metadata.FullName)"
           ./dumper/Il2CppDumper.exe $unity.FullName $metadata.FullName ./output
         continue-on-error: true
 
