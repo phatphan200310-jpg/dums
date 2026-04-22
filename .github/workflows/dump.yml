@@ -20,13 +20,17 @@ jobs:
 
       - name: Download Il2CppDumper
         run: |
-          curl -L -o dumper.zip https://github.com/Perfare/Il2CppDumper/releases/download/v6.7.40/Il2CppDumper-v6.7.40.zip
+          # Dùng link trực tiếp từ GitHub Objects để tránh bị chặn
+          $url = "https://github.com/Perfare/Il2CppDumper/releases/download/v6.7.40/Il2CppDumper-v6.7.40.zip"
+          Invoke-WebRequest -Uri $url -OutFile dumper.zip
           Expand-Archive -Path dumper.zip -DestinationPath ./dumper
 
       - name: Run Dumper
         run: |
           $unity = Get-ChildItem -Path ./game_files -Recurse | Where-Object { $_.Name -match "UnityFramework|kgvn" } | Select-Object -First 1
           $metadata = Get-ChildItem -Path ./game_files -Recurse -Filter "global-metadata.dat" | Select-Object -First 1
+          Write-Host "Sử dụng file binary: $($unity.FullName)"
+          Write-Host "Sử dụng metadata: $($metadata.FullName)"
           ./dumper/Il2CppDumper.exe $unity.FullName $metadata.FullName ./output
         continue-on-error: true
 
