@@ -11,20 +11,26 @@ jobs:
           python-version: '3.x'
 
       - name: Install gdown
-        run: pip install gdown
+        run: pip install gdown requests
 
       - name: Download from Google Drive
         run: |
           gdown --folder "https://drive.google.com/drive/folders/1Kzwj7u5UV33OXBnFf5fghLXVI_gR2Jao" -O ./game_files
         continue-on-error: true
 
-      - name: Download Il2CppDumper (Link Auto-Fix)
+      - name: Download Tool (Python bypass)
+        shell: python
         run: |
-          # Dùng link dự phòng v6.7.40 ổn định
-          $url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/raw/master/Il2CppDumper-v6.7.40.zip"
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          Invoke-WebRequest -Uri $url -OutFile dumper.zip -UserAgent "Mozilla/5.0"
-          Expand-Archive -Path dumper.zip -DestinationPath ./dumper -Force
+          import requests
+          import zipfile
+          import os
+          url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/raw/master/Il2CppDumper-v6.7.40.zip"
+          r = requests.get(url, stream=True)
+          with open("dumper.zip", "wb") as f:
+              for chunk in r.iter_content(chunk_size=8192):
+                  f.write(chunk)
+          with zipfile.ZipFile("dumper.zip", 'r') as zip_ref:
+              zip_ref.extractall("./dumper")
 
       - name: Run Dumper
         run: |
