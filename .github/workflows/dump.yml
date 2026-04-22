@@ -11,30 +11,23 @@ jobs:
           python-version: '3.x'
 
       - name: Install gdown
-        run: pip install gdown requests
+        run: pip install gdown
 
       - name: Download from Google Drive
         run: |
           gdown --folder "https://drive.google.com/drive/folders/1Kzwj7u5UV33OXBnFf5fghLXVI_gR2Jao" -O ./game_files
         continue-on-error: true
 
-      - name: Download Tool (Python bypass)
-        shell: python
+      - name: Download Tool (GitHub VIP CLI)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          import requests
-          import zipfile
-          import os
-          url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/raw/master/Il2CppDumper-v6.7.40.zip"
-          r = requests.get(url, stream=True)
-          with open("dumper.zip", "wb") as f:
-              for chunk in r.iter_content(chunk_size=8192):
-                  f.write(chunk)
-          with zipfile.ZipFile("dumper.zip", 'r') as zip_ref:
-              zip_ref.extractall("./dumper")
+          # Dùng quyền người nhà của GitHub để tải, không lo bị chặn 404 hay hỏng file ZIP
+          gh release download v6.7.40 --repo Perfare/Il2CppDumper --pattern "Il2CppDumper-v6.7.40.zip"
+          Expand-Archive -Path Il2CppDumper-v6.7.40.zip -DestinationPath ./dumper -Force
 
       - name: Run Dumper (Auto Detect OS)
         run: |
-          # Tự động quét và lọc đúng file lõi của cả 3 hệ máy: iOS, Android, PC
           $unity = Get-ChildItem -Path ./game_files -Recurse | Where-Object { $_.Name -match "^(UnityFramework|libil2cpp\.so|GameAssembly\.dll|kgvn)$" } | Select-Object -First 1
           $metadata = Get-ChildItem -Path ./game_files -Recurse -Filter "global-metadata.dat" | Select-Object -First 1
           
@@ -43,10 +36,9 @@ jobs:
               exit 1
           }
 
-          Write-Host "Đã tìm thấy Binary: $($unity.FullName)"
-          Write-Host "Đã tìm thấy Metadata: $($metadata.FullName)"
+          Write-Host "Binary: $($unity.FullName)"
+          Write-Host "Metadata: $($metadata.FullName)"
           
-          # Cho tool chạy ngầm để không bị treo log (Dùng timeout 60 giây đề phòng treo)
           $dumpProcess = Start-Process -FilePath "./dumper/Il2CppDumper.exe" -ArgumentList "`"$($unity.FullName)`" `"$($metadata.FullName)`" ./output" -PassThru -NoNewWindow
           $dumpProcess | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
           
