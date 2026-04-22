@@ -11,46 +11,43 @@ jobs:
           python-version: '3.x'
 
       - name: Install gdown
-        run: pip install gdown requests
+        run: pip install gdown
 
       - name: Download from Google Drive
         run: |
           gdown --folder "https://drive.google.com/drive/folders/1Kzwj7u5UV33OXBnFf5fghLXVI_gR2Jao" -O ./game_files
         continue-on-error: true
 
-      - name: Download Tool (Python Bypass - CHUẨN)
-        shell: python
+      - name: Extract Dumper from Drive (OFFLINE MODE)
         run: |
-          import requests
-          import zipfile
-          import os
-          url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/raw/master/Il2CppDumper-v6.7.40.zip"
-          r = requests.get(url, stream=True)
-          with open("dumper.zip", "wb") as f:
-              for chunk in r.iter_content(chunk_size=8192):
-                  f.write(chunk)
-          with zipfile.ZipFile("dumper.zip", 'r') as zip_ref:
-              zip_ref.extractall("./dumper")
+          # Tìm file zip của tool do chính ông quăng vào Drive
+          $dumperZip = Get-ChildItem -Path ./game_files -Filter "*Il2CppDumper*.zip" | Select-Object -First 1
+          if ($null -eq $dumperZip) {
+              Write-Error "LỖI: Không tìm thấy file ZIP của công cụ trong Drive! Vui lòng tải tool trên mạng và quăng vào Drive."
+              exit 1
+          }
+          Write-Host "Đã tìm thấy Tool: $($dumperZip.FullName)"
+          Expand-Archive -Path $dumperZip.FullName -DestinationPath ./dumper -Force
 
-      - name: Run Dumper (Auto Detect OS)
+      - name: Run Dumper (Auto Detect)
         run: |
           $unity = Get-ChildItem -Path ./game_files -Recurse | Where-Object { $_.Name -match "^(UnityFramework|libil2cpp\.so|GameAssembly\.dll|kgvn)$" } | Select-Object -First 1
           $metadata = Get-ChildItem -Path ./game_files -Recurse -Filter "global-metadata.dat" | Select-Object -First 1
           
           if ($null -eq $unity -or $null -eq $metadata) {
-              Write-Error "LỖI: Không tìm thấy file lõi hoặc file metadata! Nhớ ném 2 file của Android vào Drive nhé."
+              Write-Error "LỖI: Không tìm thấy file lõi hoặc file metadata!"
               exit 1
           }
 
-          Write-Host "Binary: $($unity.FullName)"
-          Write-Host "Metadata: $($metadata.FullName)"
+          $exePath = Get-ChildItem -Path ./dumper -Recurse -Filter "Il2CppDumper.exe" | Select-Object -First 1
+          Write-Host "Chạy file lõi: $($unity.FullName)"
           
-          $dumpProcess = Start-Process -FilePath "./dumper/Il2CppDumper.exe" -ArgumentList "`"$($unity.FullName)`" `"$($metadata.FullName)`" ./output" -PassThru -NoNewWindow
+          $dumpProcess = Start-Process -FilePath $exePath.FullName -ArgumentList "`"$($unity.FullName)`" `"$($metadata.FullName)`" ./output" -PassThru -NoNewWindow
           $dumpProcess | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
           
           if (-not $dumpProcess.HasExited) {
               $dumpProcess | Stop-Process -Force
-              Write-Error "LỖI: Tool bị treo. Có thể do file bị mã hóa."
+              Write-Error "LỖI: Tool bị treo."
           }
         continue-on-error: true
 
