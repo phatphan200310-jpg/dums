@@ -1,4 +1,4 @@
-name: Dump Game Offsets
+name: Dumper V2 (Bypass Header)
 on: [workflow_dispatch]
 
 jobs:
@@ -11,48 +11,70 @@ jobs:
           python-version: '3.x'
 
       - name: Install gdown
-        run: pip install gdown
+        run: pip install gdown requests
 
       - name: Download from Google Drive
         run: |
           gdown --folder "https://drive.google.com/drive/folders/1Kzwj7u5UV33OXBnFf5fghLXVI_gR2Jao" -O ./game_files
         continue-on-error: true
 
-      - name: Extract Dumper from Drive (OFFLINE MODE)
+      - name: Phẫu thuật khôi phục Header (Python Auto-Fix)
+        shell: python
         run: |
-          # Tìm file zip của tool do chính ông quăng vào Drive
-          $dumperZip = Get-ChildItem -Path ./game_files -Filter "*Il2CppDumper*.zip" | Select-Object -First 1
-          if ($null -eq $dumperZip) {
-              Write-Error "LỖI: Không tìm thấy file ZIP của công cụ trong Drive! Vui lòng tải tool trên mạng và quăng vào Drive."
-              exit 1
-          }
-          Write-Host "Đã tìm thấy Tool: $($dumperZip.FullName)"
-          Expand-Archive -Path $dumperZip.FullName -DestinationPath ./dumper -Force
+          import os
+          for root, dirs, files in os.walk('./game_files'):
+              for file in files:
+                  if 'global-metadata.dat' in file:
+                      path = os.path.join(root, file)
+                      try:
+                          with open(path, 'r+b') as f:
+                              data = bytearray(f.read())
+                              # Ép 4 byte đầu tiên về lại chữ ký chuẩn của Unity
+                              data[0:4] = b'\xAF\x1B\xB1\xFA'
+                              f.seek(0)
+                              f.write(data)
+                              print(f"[THÀNH CÔNG] Đã phá lớp ngụy trang Header của file: {path}")
+                      except Exception as e:
+                          print(f"Lỗi khi sửa file: {e}")
 
-      - name: Run Dumper (Auto Detect)
+      - name: Download Tool Dumper
+        shell: python
         run: |
-          $unity = Get-ChildItem -Path ./game_files -Recurse | Where-Object { $_.Name -match "^(UnityFramework|libil2cpp\.so|GameAssembly\.dll|kgvn)$" } | Select-Object -First 1
+          import requests
+          import zipfile
+          import os
+          url = "https://github.com/AndnixSH/Il2CppDumper-Binaries/raw/master/Il2CppDumper-v6.7.40.zip"
+          r = requests.get(url, stream=True)
+          with open("dumper.zip", "wb") as f:
+              for chunk in r.iter_content(chunk_size=8192):
+                  f.write(chunk)
+          with zipfile.ZipFile("dumper.zip", 'r') as zip_ref:
+              zip_ref.extractall("./dumper")
+
+      - name: Run Dumper V2
+        run: |
+          $unity = Get-ChildItem -Path ./game_files -Recurse | Where-Object { $_.Name -match "^(UnityFramework|libil2cpp\.so)$" } | Select-Object -First 1
           $metadata = Get-ChildItem -Path ./game_files -Recurse -Filter "global-metadata.dat" | Select-Object -First 1
           
           if ($null -eq $unity -or $null -eq $metadata) {
-              Write-Error "LỖI: Không tìm thấy file lõi hoặc file metadata!"
+              Write-Error "LỖI: Không tìm thấy file UnityFramework hoặc global-metadata.dat!"
               exit 1
           }
-
-          $exePath = Get-ChildItem -Path ./dumper -Recurse -Filter "Il2CppDumper.exe" | Select-Object -First 1
-          Write-Host "Chạy file lõi: $($unity.FullName)"
           
-          $dumpProcess = Start-Process -FilePath $exePath.FullName -ArgumentList "`"$($unity.FullName)`" `"$($metadata.FullName)`" ./output" -PassThru -NoNewWindow
-          $dumpProcess | Wait-Process -Timeout 60 -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path ./output
+          
+          # Chạy tool với file đã được phẫu thuật
+          $dumpProcess = Start-Process -FilePath "./dumper/Il2CppDumper.exe" -ArgumentList "`"$($unity.FullName)`" `"$($metadata.FullName)`" ./output" -PassThru -NoNewWindow
+          $dumpProcess | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue
           
           if (-not $dumpProcess.HasExited) {
               $dumpProcess | Stop-Process -Force
-              Write-Error "LỖI: Tool bị treo."
+              Write-Error "LỖI: Tool bị treo! Cấu trúc Unity đã bị Tencent/Garena băm nát hoàn toàn từ bên trong."
           }
         continue-on-error: true
 
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
-          name: Game-Offsets
-          path: ./output/script.json
+          name: Game-Offsets-V2
+          path: ./output/
